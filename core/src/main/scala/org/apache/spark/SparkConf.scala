@@ -27,32 +27,45 @@ import org.apache.spark.serializer.KryoSerializer
 import org.apache.spark.util.Utils
 
 /**
- * Configuration for a Spark application. Used to set various Spark parameters as key-value pairs.
- *
- * Most of the time, you would create a SparkConf object with `new SparkConf()`, which will load
- * values from any `spark.*` Java system properties set in your application as well. In this case,
- * parameters you set directly on the `SparkConf` object take priority over system properties.
- *
- * For unit tests, you can also call `new SparkConf(false)` to skip loading external settings and
- * get the same configuration no matter what the system properties are.
- *
- * All setter methods in this class support chaining. For example, you can write
- * `new SparkConf().setMaster("local").setAppName("My app")`.
- *
- * Note that once a SparkConf object is passed to Spark, it is cloned and can no longer be modified
- * by the user. Spark does not support modifying the configuration at runtime.
- *
- * @param loadDefaults whether to also load values from Java system properties
- */
+  * Configuration for a Spark application. Used to set various Spark parameters as key-value pairs.
+  *
+  * Most of the time, you would create a SparkConf object with `new SparkConf()`, which will load
+  * values from any `spark.*` Java system properties set in your application as well. In this case,
+  * parameters you set directly on the `SparkConf` object take priority over system properties.
+  * #LIANG-INFO: SparkConf会自动加载默认配置,用户也可以手动通过System.setProperty来添加配置.
+  * #LIANG-INFO: 参加SparkConf中的各种配置,用户手动添加的配置也应该以`spark.*`的规则来命名.
+  * #LIANG-INFO: 用户手动添加的配置,优先级会比默认加载的配置要高.
+  *
+  * For unit tests, you can also call `new SparkConf(false)` to skip loading external settings and
+  * get the same configuration no matter what the system properties are.
+  * #LIANG-INFO: 在编写单元测试时,可以将SparkConf的构造参数设置为false,这样会避免加载外部配置
+  * #LIANG-INFO: SparkConf()的构造参数`loadDefaults`决定了是否从Java system properties中加载配置
+  *
+  * All setter methods in this class support chaining. For example, you can write
+  * `new SparkConf().setMaster("local").setAppName("My app")`.
+  * #LIANG-INFO: SparkConf内部的各个set方法支持链式调用.
+  *
+  * Note that once a SparkConf object is passed to Spark, it is cloned and can no longer be modified
+  * by the user. Spark does not support modifying the configuration at runtime.
+  * #LIANG-INFO: Spark不支持运行时动态修改配置,因此,SparkConf一旦被传递给Spark,就不能再变更了.
+  *
+  * @param loadDefaults whether to also load values from Java system properties
+  */
 class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
 
   import SparkConf._
 
-  /** Create a SparkConf that loads defaults from system properties and the classpath */
+  /**
+    * Create a SparkConf that loads defaults from system properties and the classpath
+    * #LIANG-INFO: 创建一个SparkConf对象, 此处loadDefaults=true, 则配置会从system properties 和classpath加载
+    */
   def this() = this(true)
 
   private val settings = new ConcurrentHashMap[String, String]()
 
+  /**
+    * #LIANG-INFO: 加载系统system property中的配置
+    */
   if (loadDefaults) {
     // Load any spark.* system properties
     for ((key, value) <- Utils.getSystemProperties if key.startsWith("spark.")) {
@@ -74,9 +87,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * The master URL to connect to, such as "local" to run locally with one thread, "local[4]" to
-   * run locally with 4 cores, or "spark://master:7077" to run on a Spark standalone cluster.
-   */
+    * The master URL to connect to, such as "local" to run locally with one thread, "local[4]" to
+    * run locally with 4 cores, or "spark://master:7077" to run on a Spark standalone cluster.
+    */
   def setMaster(master: String): SparkConf = {
     set("spark.master", master)
   }
@@ -98,19 +111,19 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * Set an environment variable to be used when launching executors for this application.
-   * These variables are stored as properties of the form spark.executorEnv.VAR_NAME
-   * (for example spark.executorEnv.PATH) but this method makes them easier to set.
-   */
+    * Set an environment variable to be used when launching executors for this application.
+    * These variables are stored as properties of the form spark.executorEnv.VAR_NAME
+    * (for example spark.executorEnv.PATH) but this method makes them easier to set.
+    */
   def setExecutorEnv(variable: String, value: String): SparkConf = {
     set("spark.executorEnv." + variable, value)
   }
 
   /**
-   * Set multiple environment variables to be used when launching executors.
-   * These variables are stored as properties of the form spark.executorEnv.VAR_NAME
-   * (for example spark.executorEnv.PATH) but this method makes them easier to set.
-   */
+    * Set multiple environment variables to be used when launching executors.
+    * These variables are stored as properties of the form spark.executorEnv.VAR_NAME
+    * (for example spark.executorEnv.PATH) but this method makes them easier to set.
+    */
   def setExecutorEnv(variables: Seq[(String, String)]): SparkConf = {
     for ((k, v) <- variables) {
       setExecutorEnv(k, v)
@@ -119,16 +132,16 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * Set multiple environment variables to be used when launching executors.
-   * (Java-friendly version.)
-   */
+    * Set multiple environment variables to be used when launching executors.
+    * (Java-friendly version.)
+    */
   def setExecutorEnv(variables: Array[(String, String)]): SparkConf = {
     setExecutorEnv(variables.toSeq)
   }
 
   /**
-   * Set the location where Spark is installed on worker nodes.
-   */
+    * Set the location where Spark is installed on worker nodes.
+    */
   def setSparkHome(home: String): SparkConf = {
     set("spark.home", home)
   }
@@ -148,9 +161,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * Use Kryo serialization and register the given set of classes with Kryo.
-   * If called multiple times, this will append the classes from all calls together.
-   */
+    * Use Kryo serialization and register the given set of classes with Kryo.
+    * If called multiple times, this will append the classes from all calls together.
+    */
   def registerKryoClasses(classes: Array[Class[_]]): SparkConf = {
     val allClassNames = new LinkedHashSet[String]()
     allClassNames ++= get("spark.kryo.classesToRegister", "").split(',').filter(!_.isEmpty)
@@ -178,103 +191,109 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * Get a time parameter as seconds; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then seconds are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a time parameter as seconds; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then seconds are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getTimeAsSeconds(key: String): Long = {
     Utils.timeStringAsSeconds(get(key))
   }
 
   /**
-   * Get a time parameter as seconds, falling back to a default if not set. If no
-   * suffix is provided then seconds are assumed.
-   */
+    * Get a time parameter as seconds, falling back to a default if not set. If no
+    * suffix is provided then seconds are assumed.
+    */
   def getTimeAsSeconds(key: String, defaultValue: String): Long = {
     Utils.timeStringAsSeconds(get(key, defaultValue))
   }
 
   /**
-   * Get a time parameter as milliseconds; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then milliseconds are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a time parameter as milliseconds; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then milliseconds are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getTimeAsMs(key: String): Long = {
     Utils.timeStringAsMs(get(key))
   }
 
   /**
-   * Get a time parameter as milliseconds, falling back to a default if not set. If no
-   * suffix is provided then milliseconds are assumed.
-   */
+    * Get a time parameter as milliseconds, falling back to a default if not set. If no
+    * suffix is provided then milliseconds are assumed.
+    */
   def getTimeAsMs(key: String, defaultValue: String): Long = {
     Utils.timeStringAsMs(get(key, defaultValue))
   }
 
   /**
-   * Get a size parameter as bytes; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then bytes are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a size parameter as bytes; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then bytes are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getSizeAsBytes(key: String): Long = {
     Utils.byteStringAsBytes(get(key))
   }
 
   /**
-   * Get a size parameter as bytes, falling back to a default if not set. If no
-   * suffix is provided then bytes are assumed.
-   */
+    * Get a size parameter as bytes, falling back to a default if not set. If no
+    * suffix is provided then bytes are assumed.
+    */
   def getSizeAsBytes(key: String, defaultValue: String): Long = {
     Utils.byteStringAsBytes(get(key, defaultValue))
   }
 
   /**
-   * Get a size parameter as Kibibytes; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then Kibibytes are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a size parameter as Kibibytes; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then Kibibytes are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getSizeAsKb(key: String): Long = {
     Utils.byteStringAsKb(get(key))
   }
 
   /**
-   * Get a size parameter as Kibibytes, falling back to a default if not set. If no
-   * suffix is provided then Kibibytes are assumed.
-   */
+    * Get a size parameter as Kibibytes, falling back to a default if not set. If no
+    * suffix is provided then Kibibytes are assumed.
+    */
   def getSizeAsKb(key: String, defaultValue: String): Long = {
     Utils.byteStringAsKb(get(key, defaultValue))
   }
 
   /**
-   * Get a size parameter as Mebibytes; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then Mebibytes are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a size parameter as Mebibytes; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then Mebibytes are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getSizeAsMb(key: String): Long = {
     Utils.byteStringAsMb(get(key))
   }
 
   /**
-   * Get a size parameter as Mebibytes, falling back to a default if not set. If no
-   * suffix is provided then Mebibytes are assumed.
-   */
+    * Get a size parameter as Mebibytes, falling back to a default if not set. If no
+    * suffix is provided then Mebibytes are assumed.
+    */
   def getSizeAsMb(key: String, defaultValue: String): Long = {
     Utils.byteStringAsMb(get(key, defaultValue))
   }
 
   /**
-   * Get a size parameter as Gibibytes; throws a NoSuchElementException if it's not set. If no
-   * suffix is provided then Gibibytes are assumed.
-   * @throws NoSuchElementException
-   */
+    * Get a size parameter as Gibibytes; throws a NoSuchElementException if it's not set. If no
+    * suffix is provided then Gibibytes are assumed.
+    *
+    * @throws NoSuchElementException
+    */
   def getSizeAsGb(key: String): Long = {
     Utils.byteStringAsGb(get(key))
   }
 
   /**
-   * Get a size parameter as Gibibytes, falling back to a default if not set. If no
-   * suffix is provided then Gibibytes are assumed.
-   */
+    * Get a size parameter as Gibibytes, falling back to a default if not set. If no
+    * suffix is provided then Gibibytes are assumed.
+    */
   def getSizeAsGb(key: String, defaultValue: String): Long = {
     Utils.byteStringAsGb(get(key, defaultValue))
   }
@@ -312,25 +331,25 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   /** Get all executor environment variables set on this SparkConf */
   def getExecutorEnv: Seq[(String, String)] = {
     val prefix = "spark.executorEnv."
-    getAll.filter{case (k, v) => k.startsWith(prefix)}
-          .map{case (k, v) => (k.substring(prefix.length), v)}
+    getAll.filter { case (k, v) => k.startsWith(prefix) }
+      .map { case (k, v) => (k.substring(prefix.length), v) }
   }
 
   /** Get all akka conf variables set on this SparkConf */
   def getAkkaConf: Seq[(String, String)] =
-    /* This is currently undocumented. If we want to make this public we should consider
-     * nesting options under the spark namespace to avoid conflicts with user akka options.
-     * Otherwise users configuring their own akka code via system properties could mess up
-     * spark's akka options.
-     *
-     *   E.g. spark.akka.option.x.y.x = "value"
-     */
+  /* This is currently undocumented. If we want to make this public we should consider
+   * nesting options under the spark namespace to avoid conflicts with user akka options.
+   * Otherwise users configuring their own akka code via system properties could mess up
+   * spark's akka options.
+   *
+   *   E.g. spark.akka.option.x.y.x = "value"
+   */
     getAll.filter { case (k, _) => isAkkaConf(k) }
 
   /**
-   * Returns the Spark application id, valid in the Driver after TaskScheduler registration and
-   * from the start in the Executor.
-   */
+    * Returns the Spark application id, valid in the Driver after TaskScheduler registration and
+    * from the start in the Executor.
+    */
   def getAppId: String = get("spark.app.id")
 
   /** Does the configuration contain a given parameter? */
@@ -342,9 +361,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * By using this instead of System.getenv(), environment variables can be mocked
-   * in unit tests.
-   */
+    * By using this instead of System.getenv(), environment variables can be mocked
+    * in unit tests.
+    */
   private[spark] def getenv(name: String): String = System.getenv(name)
 
   /** Checks for illegal or deprecated config settings. Throws an exception for the former. Not
@@ -366,9 +385,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
     sys.props.get("spark.driver.libraryPath").foreach { value =>
       val warning =
         s"""
-          |spark.driver.libraryPath was detected (set to '$value').
-          |This is deprecated in Spark 1.2+.
-          |
+           |spark.driver.libraryPath was detected (set to '$value').
+           |This is deprecated in Spark 1.2+.
+           |
           |Please instead use: $driverLibraryPathKey
         """.stripMargin
       logWarning(warning)
@@ -406,14 +425,14 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
     sys.env.get("SPARK_JAVA_OPTS").foreach { value =>
       val warning =
         s"""
-          |SPARK_JAVA_OPTS was detected (set to '$value').
-          |This is deprecated in Spark 1.0+.
-          |
+           |SPARK_JAVA_OPTS was detected (set to '$value').
+           |This is deprecated in Spark 1.0+.
+           |
           |Please instead use:
-          | - ./spark-submit with conf/spark-defaults.conf to set defaults for an application
-          | - ./spark-submit with --driver-java-options to set -X options for a driver
-          | - spark.executor.extraJavaOptions to set -X options for executors
-          | - SPARK_DAEMON_JAVA_OPTS to set java options for standalone daemons (master or worker)
+           | - ./spark-submit with conf/spark-defaults.conf to set defaults for an application
+           | - ./spark-submit with --driver-java-options to set -X options for a driver
+           | - spark.executor.extraJavaOptions to set -X options for executors
+           | - SPARK_DAEMON_JAVA_OPTS to set java options for standalone daemons (master or worker)
         """.stripMargin
       logWarning(warning)
 
@@ -430,12 +449,12 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
     sys.env.get("SPARK_CLASSPATH").foreach { value =>
       val warning =
         s"""
-          |SPARK_CLASSPATH was detected (set to '$value').
-          |This is deprecated in Spark 1.0+.
-          |
+           |SPARK_CLASSPATH was detected (set to '$value').
+           |This is deprecated in Spark 1.0+.
+           |
           |Please instead use:
-          | - ./spark-submit with --driver-class-path to augment the driver classpath
-          | - spark.executor.extraClassPath to augment the executor classpath
+           | - ./spark-submit with --driver-class-path to augment the driver classpath
+           | - spark.executor.extraClassPath to augment the executor classpath
         """.stripMargin
       logWarning(warning)
 
@@ -451,11 +470,11 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
   }
 
   /**
-   * Return a string listing all keys and values, one per line. This is useful to print the
-   * configuration out for debugging.
-   */
+    * Return a string listing all keys and values, one per line. This is useful to print the
+    * configuration out for debugging.
+    */
   def toDebugString: String = {
-    getAll.sorted.map{case (k, v) => k + "=" + v}.mkString("\n")
+    getAll.sorted.map { case (k, v) => k + "=" + v }.mkString("\n")
   }
 
 }
@@ -463,16 +482,16 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
 private[spark] object SparkConf extends Logging {
 
   /**
-   * Maps deprecated config keys to information about the deprecation.
-   *
-   * The extra information is logged as a warning when the config is present in the user's
-   * configuration.
-   */
+    * Maps deprecated config keys to information about the deprecation.
+    *
+    * The extra information is logged as a warning when the config is present in the user's
+    * configuration.
+    */
   private val deprecatedConfigs: Map[String, DeprecatedConfig] = {
     val configs = Seq(
       DeprecatedConfig("spark.cache.class", "0.8",
         "The spark.cache.class property is no longer being used! Specify storage levels using " +
-        "the RDD.persist() method instead."),
+          "the RDD.persist() method instead."),
       DeprecatedConfig("spark.yarn.user.classpath.first", "1.3",
         "Please use spark.{driver,executor}.userClassPathFirst instead."),
       DeprecatedConfig("spark.kryoserializer.buffer.mb", "1.4",
@@ -481,15 +500,15 @@ private[spark] object SparkConf extends Logging {
           "are no longer accepted. To specify the equivalent now, one may use '64k'.")
     )
 
-    Map(configs.map { cfg => (cfg.key -> cfg) } : _*)
+    Map(configs.map { cfg => (cfg.key -> cfg) }: _*)
   }
 
   /**
-   * Maps a current config key to alternate keys that were used in previous version of Spark.
-   *
-   * The alternates are used in the order defined in this map. If deprecated configs are
-   * present in the user's configuration, a warning is logged.
-   */
+    * Maps a current config key to alternate keys that were used in previous version of Spark.
+    *
+    * The alternates are used in the order defined in this map. If deprecated configs are
+    * present in the user's configuration, a warning is logged.
+    */
   private val configsWithAlternatives = Map[String, Seq[AlternateConfig]](
     "spark.executor.userClassPathFirst" -> Seq(
       AlternateConfig("spark.files.userClassPathFirst", "1.3")),
@@ -508,8 +527,8 @@ private[spark] object SparkConf extends Logging {
     "spark.reducer.maxSizeInFlight" -> Seq(
       AlternateConfig("spark.reducer.maxMbInFlight", "1.4")),
     "spark.kryoserializer.buffer" ->
-        Seq(AlternateConfig("spark.kryoserializer.buffer.mb", "1.4",
-          translation = s => s"${(s.toDouble * 1000).toInt}k")),
+      Seq(AlternateConfig("spark.kryoserializer.buffer.mb", "1.4",
+        translation = s => s"${(s.toDouble * 1000).toInt}k")),
     "spark.kryoserializer.buffer.max" -> Seq(
       AlternateConfig("spark.kryoserializer.buffer.max.mb", "1.4")),
     "spark.shuffle.file.buffer" -> Seq(
@@ -528,14 +547,14 @@ private[spark] object SparkConf extends Logging {
       AlternateConfig("spark.akka.askTimeout", "1.4")),
     "spark.rpc.lookupTimeout" -> Seq(
       AlternateConfig("spark.akka.lookupTimeout", "1.4"))
-    )
+  )
 
   /**
-   * A view of `configsWithAlternatives` that makes it more efficient to look up deprecated
-   * config keys.
-   *
-   * Maps the deprecated config name to a 2-tuple (new config name, alternate config info).
-   */
+    * A view of `configsWithAlternatives` that makes it more efficient to look up deprecated
+    * config keys.
+    *
+    * Maps the deprecated config name to a 2-tuple (new config name, alternate config info).
+    */
   private val allAlternatives: Map[String, (String, AlternateConfig)] = {
     configsWithAlternatives.keys.flatMap { key =>
       configsWithAlternatives(key).map { cfg => (cfg.key -> (key -> cfg)) }
@@ -543,36 +562,36 @@ private[spark] object SparkConf extends Logging {
   }
 
   /**
-   * Return whether the given config is an akka config (e.g. akka.actor.provider).
-   * Note that this does not include spark-specific akka configs (e.g. spark.akka.timeout).
-   */
+    * Return whether the given config is an akka config (e.g. akka.actor.provider).
+    * Note that this does not include spark-specific akka configs (e.g. spark.akka.timeout).
+    */
   def isAkkaConf(name: String): Boolean = name.startsWith("akka.")
 
   /**
-   * Return whether the given config should be passed to an executor on start-up.
-   *
-   * Certain akka and authentication configs are required of the executor when it connects to
-   * the scheduler, while the rest of the spark configs can be inherited from the driver later.
-   */
+    * Return whether the given config should be passed to an executor on start-up.
+    *
+    * Certain akka and authentication configs are required of the executor when it connects to
+    * the scheduler, while the rest of the spark configs can be inherited from the driver later.
+    */
   def isExecutorStartupConf(name: String): Boolean = {
     isAkkaConf(name) ||
-    name.startsWith("spark.akka") ||
-    name.startsWith("spark.auth") ||
-    name.startsWith("spark.ssl") ||
-    isSparkPortConf(name)
+      name.startsWith("spark.akka") ||
+      name.startsWith("spark.auth") ||
+      name.startsWith("spark.ssl") ||
+      isSparkPortConf(name)
   }
 
   /**
-   * Return true if the given config matches either `spark.*.port` or `spark.port.*`.
-   */
+    * Return true if the given config matches either `spark.*.port` or `spark.port.*`.
+    */
   def isSparkPortConf(name: String): Boolean = {
     (name.startsWith("spark.") && name.endsWith(".port")) || name.startsWith("spark.port.")
   }
 
   /**
-   * Looks for available deprecated keys for the given config option, and return the first
-   * value available.
-   */
+    * Looks for available deprecated keys for the given config option, and return the first
+    * value available.
+    */
   def getDeprecatedConfig(key: String, conf: SparkConf): Option[String] = {
     configsWithAlternatives.get(key).flatMap { alts =>
       alts.collectFirst { case alt if conf.contains(alt.key) =>
@@ -583,44 +602,44 @@ private[spark] object SparkConf extends Logging {
   }
 
   /**
-   * Logs a warning message if the given config key is deprecated.
-   */
+    * Logs a warning message if the given config key is deprecated.
+    */
   def logDeprecationWarning(key: String): Unit = {
     deprecatedConfigs.get(key).foreach { cfg =>
       logWarning(
         s"The configuration key '$key' has been deprecated as of Spark ${cfg.version} and " +
-        s"may be removed in the future. ${cfg.deprecationMessage}")
+          s"may be removed in the future. ${cfg.deprecationMessage}")
     }
 
     allAlternatives.get(key).foreach { case (newKey, cfg) =>
       logWarning(
         s"The configuration key '$key' has been deprecated as of Spark ${cfg.version} and " +
-        s"and may be removed in the future. Please use the new key '$newKey' instead.")
+          s"and may be removed in the future. Please use the new key '$newKey' instead.")
     }
   }
 
   /**
-   * Holds information about keys that have been deprecated and do not have a replacement.
-   *
-   * @param key The deprecated key.
-   * @param version Version of Spark where key was deprecated.
-   * @param deprecationMessage Message to include in the deprecation warning.
-   */
+    * Holds information about keys that have been deprecated and do not have a replacement.
+    *
+    * @param key                The deprecated key.
+    * @param version            Version of Spark where key was deprecated.
+    * @param deprecationMessage Message to include in the deprecation warning.
+    */
   private case class DeprecatedConfig(
-      key: String,
-      version: String,
-      deprecationMessage: String)
+                                       key: String,
+                                       version: String,
+                                       deprecationMessage: String)
 
   /**
-   * Information about an alternate configuration key that has been deprecated.
-   *
-   * @param key The deprecated config key.
-   * @param version The Spark version in which the key was deprecated.
-   * @param translation A translation function for converting old config values into new ones.
-   */
+    * Information about an alternate configuration key that has been deprecated.
+    *
+    * @param key         The deprecated config key.
+    * @param version     The Spark version in which the key was deprecated.
+    * @param translation A translation function for converting old config values into new ones.
+    */
   private case class AlternateConfig(
-      key: String,
-      version: String,
-      translation: String => String = null)
+                                      key: String,
+                                      version: String,
+                                      translation: String => String = null)
 
 }
