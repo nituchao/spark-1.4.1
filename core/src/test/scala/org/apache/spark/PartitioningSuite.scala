@@ -27,6 +27,12 @@ import org.apache.spark.util.StatCounter
 
 class PartitioningSuite extends SparkFunSuite with SharedSparkContext with PrivateMethodTester {
 
+  /**
+    * #LIANG-INFO: 这个用例测试的是HashPartitioner的判等操作.
+    * #LIANG-INFO: 判等操作本质上是调用HashPartitioner的equals方法.
+    * #LIANG-INFO: 在HashPartitioner的equals方法中, 如果numPartitions相等,则认为对象相等.
+    * #LIANG-INFO: 因此, 对于HashPartitioner, 只要指定的分区数相等, 则生成的HashPartitioner对象相等.
+    */
   test("HashPartitioner equality") {
     val p2 = new HashPartitioner(2)
     val p4 = new HashPartitioner(4)
@@ -39,6 +45,11 @@ class PartitioningSuite extends SparkFunSuite with SharedSparkContext with Priva
     assert(anotherP4 === p4)
   }
 
+  /**
+    * #LIANG-INFO: 这个用例测试的是RangePartitioner的判等操作.
+    * #LIANG-INFO: 判等操作本质上是调用HashPartitioner的equals方法.
+    * #LIANG-INFO: 在RangePartitioner的equalse方法中, 如果采样数组一样, 并且ascending一致, 则认为对象相等.
+    */
   test("RangePartitioner equality") {
     // Make an RDD where all the elements are the same so that the partition range bounds
     // are deterministically all the same.
@@ -85,7 +96,8 @@ class PartitioningSuite extends SparkFunSuite with SharedSparkContext with Priva
         } else {
           assert(partition === 0)
         }
-      }}
+      }
+      }
     }
   }
 
@@ -182,11 +194,11 @@ class PartitioningSuite extends SparkFunSuite with SharedSparkContext with Priva
     assert(reduced2.partitioner === Some(new HashPartitioner(2)))
     assert(reduced4.partitioner === Some(new HashPartitioner(4)))
 
-    assert(grouped2.groupByKey().partitioner  === grouped2.partitioner)
-    assert(grouped2.groupByKey(3).partitioner !=  grouped2.partitioner)
+    assert(grouped2.groupByKey().partitioner === grouped2.partitioner)
+    assert(grouped2.groupByKey(3).partitioner != grouped2.partitioner)
     assert(grouped2.groupByKey(2).partitioner === grouped2.partitioner)
-    assert(grouped4.groupByKey().partitioner  === grouped4.partitioner)
-    assert(grouped4.groupByKey(3).partitioner !=  grouped4.partitioner)
+    assert(grouped4.groupByKey().partitioner === grouped4.partitioner)
+    assert(grouped4.groupByKey(3).partitioner != grouped4.partitioner)
     assert(grouped4.groupByKey(4).partitioner === grouped4.partitioner)
 
     assert(grouped2.join(grouped4).partitioner === grouped4.partitioner)
@@ -235,13 +247,13 @@ class PartitioningSuite extends SparkFunSuite with SharedSparkContext with Priva
   test("zero-length partitions should be correctly handled") {
     // Create RDD with some consecutive empty partitions (including the "first" one)
     val rdd: RDD[Double] = sc
-        .parallelize(Array(-1.0, -1.0, -1.0, -1.0, 2.0, 4.0, -1.0, -1.0), 8)
-        .filter(_ >= 0.0)
+      .parallelize(Array(-1.0, -1.0, -1.0, -1.0, 2.0, 4.0, -1.0, -1.0), 8)
+      .filter(_ >= 0.0)
 
     // Run the partitions, including the consecutive empty ones, through StatCounter
     val stats: StatCounter = rdd.stats()
     assert(abs(6.0 - stats.sum) < 0.01)
-    assert(abs(6.0/2 - rdd.mean) < 0.01)
+    assert(abs(6.0 / 2 - rdd.mean) < 0.01)
     assert(abs(1.0 - rdd.variance) < 0.01)
     assert(abs(1.0 - rdd.stdev) < 0.01)
     assert(stats.max === 4.0)
