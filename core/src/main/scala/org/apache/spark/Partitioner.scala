@@ -33,6 +33,14 @@ import org.apache.spark.util.random.{XORShiftRandom, SamplingUtils}
   * An object that defines how the elements in a key-value pair RDD are partitioned by key.
   * Maps each key to a partition ID, from 0 to `numPartitions - 1`.
   *
+  * #LIANG-INFO: 在Spark中分区器直接决定了RDD中分区的个数.
+  * #LIANG-INFO: 在Spark中分区器直接决定了每条数据经过Shuffle过程属于哪个分区.
+  * #LIANG-INFO: 在Spark中分区器决定了Reduce的个数.
+  *
+  * #LIANG-INFO: 只有Key-Value类型的RDD才有分区, 非Key-Value类型的RDD分区的值是None.
+  * #LIANG-QUESTION: 哪些RDD是非Key-Value型的.
+  *
+  *
   * #LIANG-INFO: 分区器, 该对象决定了key-value型的RDD是如何按照key进行分区的.
   * #LIANG-INFO: 将key映射成一个分区ID, 分区ID的范围从0到`numPartitions - 1`.
   * #LIANG-INFO: 常用的分区实现: HashPartitioner 和 RangePartitioner.
@@ -90,6 +98,8 @@ object Partitioner {
   * produce an unexpected or incorrect result.
   *
   * #LIANG-INFO: 用key的hashCode对分区数量取模, 将取模结果作为getPartition的返回值.
+  *
+  * #LIANG-INFO: 使用HashPartitioner分区器要指定分区数量.
   */
 class HashPartitioner(partitions: Int) extends Partitioner {
   def numPartitions: Int = partitions
@@ -110,6 +120,19 @@ class HashPartitioner(partitions: Int) extends Partitioner {
 }
 
 /**
+  * #LIANG-INFO: RangePartitioner分区尽量保证每个分区中数据量的`均匀`, 而且分区与分区之间是有序的.
+  * #LIANG-INFO: 也就是说,一个分区中的元素肯定都比另一个分区内的元素小或者大.
+  * #LIANG-INFO: 但是分区内的元素是不能保证顺序的.
+  * #LIANG-INFO: 简单的说就是将一定范围内的数据映射到某一个分区内.
+  *
+  * #LIANG-INFO: RangePartitioner分区器的主要作用就是将一定范围内的数映射到某一个分区内, 故它的实现中分界的算法尤为重要.
+  * #LIANG-INFO: RangePartitioner分区器为了确定分区的分界, 采用了Reservoir Sampling(水塘抽样)算法.
+  * #LIANG-INFO: Reservoir Sampling算法解决了从n个数中随机取出k个数的问题.
+  *
+  * #LIANG-INFO: 使用RangePartitioner分区器要指定分区数量.
+  * #LIANG-INFO: 使用RangePartitioner分区器要指定Key-Value型RDD对象.
+  * #LIANG-INFO: 使用RangePartitiner分区器要指定排序顺序ascending(升序/降序).
+  *
   * A [[org.apache.spark.Partitioner]] that partitions sortable records by range into roughly
   * equal ranges. The ranges are determined by sampling the content of the RDD passed in.
   *
@@ -128,15 +151,48 @@ class RangePartitioner[K: Ordering : ClassTag, V](
 
   private var ordering = implicitly[Ordering[K]]
 
+  /**
+    * #LIANG-INFO: rangeBounds是RangePartitioner划分分区的核心算法.
+    * #LIANG-INFO: rangeBounds是一个变量.
+    * #LIANG-INFO: rangeBounds里保存的是分区的`分界`数组.
+    */
   // An array of upper bounds for the first (partitions - 1) partitions
   private var rangeBounds: Array[K] = {
+    /**
+      * 构造用于分区的`分界`数组.
+      */
     if (partitions <= 1) {
+      /**
+        * #LIANG-INFO: 如果`0 <= partitions <= 1`, 则返回空的`分界`数组.
+        * #LIANG-INFO: 从逻辑上讲, 当分区数为0时, 表示不用分区.
+        * #LIANG-INFO: 从逻辑上讲, 当分区数为1时, 表示RDD中的所有Key-Value元素都在同一个分区中.
+        */
       Array.empty
     } else {
+      /**
+        * #LIANG-INFO: 采用ReservoirSample(水塘采样法)进行采样生成`分界`数组.
+        * #LIANG-INFO: 采样大小sampleSize默认为partitions(分区数)的20倍, 最大100W.
+        */
       // This is the sample size we need to have roughly balanced output partitions, capped at 1M.
       val sampleSize = math.min(20.0 * partitions, 1e6)
+      /**
+        * #LIANG-INFO: 此处的rdd.partitions是继承自父RDD的方法, 得到父RDD的partiontion数组.
+        * #LIANG-INFO: 用父RDD的partition数量作为参考, 得到当前RDD每个分区要抽样的样本数量.
+        * #LIANG-INFO: 由于父RDD各分区中的数量可能会出现倾斜的情况, 因此每个分区需要采样的数据量是正常数的3倍.
+        * #LIANG-INFO: 乘以3的目的就是保证数据量小的分区能够采样到足够的数据, 而对于数据量大的分区会进行二次采样.
+        *
+        * #LIANG-INFO: java.lang.Math.ceil(double a) 返回最小的（最接近负无穷大）double值，大于或相等于参数，并相等于一个整数.
+        * #LIANG-INFO: eg. Math.ceil(125.9) = 126.0; Math.ceil(0.4873) = 1.0; Math.ceil(-0.65) = -0.0;
+        *
+        */
       // Assume the input partitions are roughly balanced and over-sample a little bit.
       val sampleSizePerPartition = math.ceil(3.0 * sampleSize / rdd.partitions.size).toInt
+      /**
+        * #LIANG-INFO: 每个分区要采样的样本数量确定以后, 使用水塘采样法对rdd中的元素进行采样.
+        * #LIANG-INFO: 对rdd进行采样时对元素的key进行操作, `_._1`即为元素的key.
+        * #LIANG-INFO: numItems是rdd元素的总个数.
+        * #LIANG-INFO: sketched的类型是`Array[(Int, Int, Array[K])]`, 记录的是分区的编号, 该分区中总元素的个数, 以及从父RDD中每个分区采样的数据.
+        */
       val (numItems, sketched) = RangePartitioner.sketch(rdd.map(_._1), sampleSizePerPartition)
       if (numItems == 0L) {
         Array.empty
