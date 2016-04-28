@@ -315,6 +315,11 @@ class RangePartitioner[K: Ordering : ClassTag, V](
 private[spark] object RangePartitioner {
 
   /**
+    * #LIANG-INFO: sketch 方法用于数据的采样.
+    * #LIANG-INFO: 返回结果中:
+    * #LIANG-INFO: numItems 表示 RDD 所有数据的个数（等价于之前的 rddSize).
+    * #LIANG-INFO: sketched 是一个迭代器，每个元素是一个三元组 (idx, n, sample), 其中 idx 是分区编号, n 是分区的数据个数（而不是采样个数, sample 是一个数组，存储该分区采样得到的样本数据。
+    *
     * Sketches the input RDD via reservoir sampling on each partition.
     *
     * @param rdd                    the input RDD to sketch
