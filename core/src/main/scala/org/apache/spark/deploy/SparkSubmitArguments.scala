@@ -29,9 +29,9 @@ import org.apache.spark.launcher.SparkSubmitArgumentsParser
 import org.apache.spark.util.Utils
 
 /**
- * Parses and encapsulates arguments from the spark-submit script.
- * The env argument is used for testing.
- */
+  * Parses and encapsulates arguments from the spark-submit script.
+  * The env argument is used for testing.
+  */
 private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, String] = sys.env)
   extends SparkSubmitArgumentsParser {
   var master: String = null
@@ -73,6 +73,10 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var submissionToRequestStatusFor: String = null
   var useRest: Boolean = true // used internally
 
+  /**
+    * #LIANG-INFO: Spark会从指定的propertiesFile加载相关的属性信息
+    * #LIANG-INFO: 如果verbose是开启的, 则会打印出相关的属性信息
+    */
   /** Default properties present in the currently defined defaults file. */
   lazy val defaultSparkProperties: HashMap[String, String] = {
     val defaultProperties = new HashMap[String, String]()
@@ -86,6 +90,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     defaultProperties
   }
 
+  /**
+    * #LIANG-INFO: 解析通过命令行传入的参数
+    */
   // Set parameters from command line arguments
   try {
     parse(args.toList)
@@ -103,9 +110,10 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   validateArguments()
 
   /**
-   * Merge values from the default properties file with those specified through --conf.
-   * When this is called, `sparkProperties` is already filled with configs from the latter.
-   */
+    * #LIANG-INFO: sparkProperties在这里赋值, 将默认的SparkProperties中的配置写入
+    * Merge values from the default properties file with those specified through --conf.
+    * When this is called, `sparkProperties` is already filled with configs from the latter.
+    */
   private def mergeDefaultSparkProperties(): Unit = {
     // Use common defaults file, if not specified by user
     propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultPropertiesFile(env))
@@ -118,8 +126,8 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   /**
-   * Remove keys that don't start with "spark." from `sparkProperties`.
-   */
+    * Remove keys that don't start with "spark." from `sparkProperties`.
+    */
   private def ignoreNonSparkProperties(): Unit = {
     sparkProperties.foreach { case (k, v) =>
       if (!k.startsWith("spark.")) {
@@ -130,8 +138,8 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   /**
-   * Load arguments from environment variables, Spark properties etc.
-   */
+    * Load arguments from environment variables, Spark properties etc.
+    */
   private def loadEnvironmentArguments(): Unit = {
     master = Option(master)
       .orElse(sparkProperties.get("spark.master"))
@@ -170,6 +178,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     numExecutors = Option(numExecutors)
       .getOrElse(sparkProperties.get("spark.executor.instances").orNull)
 
+    /**
+      * #LIANG-INFO: 如果没有指定JAR, 则从指定的primaryResource里获取main class
+      */
     // Try to set main class from JAR if no --class argument is given
     if (mainClass == null && !isPython && !isR && primaryResource != null) {
       val uri = new URI(primaryResource)
@@ -188,7 +199,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         case _ =>
           SparkSubmit.printErrorAndExit(
             s"Cannot load main class from JAR $primaryResource with URI $uriScheme. " +
-            "Please specify a class through --class.")
+              "Please specify a class through --class.")
       }
     }
 
@@ -268,35 +279,35 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
 
   override def toString: String = {
     s"""Parsed arguments:
-    |  master                  $master
-    |  deployMode              $deployMode
-    |  executorMemory          $executorMemory
-    |  executorCores           $executorCores
-    |  totalExecutorCores      $totalExecutorCores
-    |  propertiesFile          $propertiesFile
-    |  driverMemory            $driverMemory
-    |  driverCores             $driverCores
-    |  driverExtraClassPath    $driverExtraClassPath
-    |  driverExtraLibraryPath  $driverExtraLibraryPath
-    |  driverExtraJavaOptions  $driverExtraJavaOptions
-    |  supervise               $supervise
-    |  queue                   $queue
-    |  numExecutors            $numExecutors
-    |  files                   $files
-    |  pyFiles                 $pyFiles
-    |  archives                $archives
-    |  mainClass               $mainClass
-    |  primaryResource         $primaryResource
-    |  name                    $name
-    |  childArgs               [${childArgs.mkString(" ")}]
-    |  jars                    $jars
-    |  packages                $packages
-    |  repositories            $repositories
-    |  verbose                 $verbose
-    |
+        |  master                  $master
+        |  deployMode              $deployMode
+        |  executorMemory          $executorMemory
+        |  executorCores           $executorCores
+        |  totalExecutorCores      $totalExecutorCores
+        |  propertiesFile          $propertiesFile
+        |  driverMemory            $driverMemory
+        |  driverCores             $driverCores
+        |  driverExtraClassPath    $driverExtraClassPath
+        |  driverExtraLibraryPath  $driverExtraLibraryPath
+        |  driverExtraJavaOptions  $driverExtraJavaOptions
+        |  supervise               $supervise
+        |  queue                   $queue
+        |  numExecutors            $numExecutors
+        |  files                   $files
+        |  pyFiles                 $pyFiles
+        |  archives                $archives
+        |  mainClass               $mainClass
+        |  primaryResource         $primaryResource
+        |  name                    $name
+        |  childArgs               [${childArgs.mkString(" ")}]
+        |  jars                    $jars
+        |  packages                $packages
+        |  repositories            $repositories
+        |  verbose                 $verbose
+        |
     |Spark properties used, including those specified through
-    | --conf and those from the properties file $propertiesFile:
-    |${sparkProperties.mkString("  ", "\n  ", "\n")}
+        | --conf and those from the properties file $propertiesFile:
+        |${sparkProperties.mkString("  ", "\n  ", "\n")}
     """.stripMargin
   }
 
@@ -417,11 +428,11 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   /**
-   * Handle unrecognized command line options.
-   *
-   * The first unrecognized option is treated as the "primary resource". Everything else is
-   * treated as application arguments.
-   */
+    * Handle unrecognized command line options.
+    *
+    * The first unrecognized option is treated as the "primary resource". Everything else is
+    * treated as application arguments.
+    */
   override protected def handleUnknown(opt: String): Boolean = {
     if (opt.startsWith("-")) {
       SparkSubmit.printErrorAndExit(s"Unrecognized option '$opt'.")

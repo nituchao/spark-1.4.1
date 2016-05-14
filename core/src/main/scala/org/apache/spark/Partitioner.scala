@@ -38,11 +38,21 @@ import org.apache.spark.util.random.{XORShiftRandom, SamplingUtils}
   * #LIANG-INFO: 在Spark中分区器决定了Reduce的个数.
   *
   * #LIANG-INFO: 只有Key-Value类型的RDD才有分区, 非Key-Value类型的RDD分区的值是None.
-  * #LIANG-QUESTION: 哪些RDD是非Key-Value型的.
+  * #LIANG-INFO: 哪些RDD是非Key-Value型的呢, 请看下面的例子
   *
+  * ```
+  * scala> val input = sc.parallelize(List(1, 2, 2, 3))
+  * input: org.apache.spark.rdd.RDD[Int] = ParallelCollectionRDD[0] at parallelize at <console>:21
+  *
+  * scala>  val sum = input.map(x => x + 1)
+  * sum: org.apache.spark.rdd.RDD[Int] = MapPartitionsRDD[1] at map at <console>:23
+  *
+  * scala> sum.partitioner;
+  * res0: Option[org.apache.spark.Partitioner] = None
+  *```
   *
   * #LIANG-INFO: 分区器, 该对象决定了key-value型的RDD是如何按照key进行分区的.
-  * #LIANG-INFO: 将key映射成一个分区ID, 分区ID的范围从0到`numPartitions - 1`.
+  * #LIANG-INFO: 将key映射成一个分区ID, 分区ID的范围从0到numPartitions - 1`.
   * #LIANG-INFO: 常用的分区实现: HashPartitioner 和 RangePartitioner.
   */
 abstract class Partitioner extends Serializable {
@@ -318,7 +328,7 @@ private[spark] object RangePartitioner {
     * #LIANG-INFO: sketch 方法用于数据的采样.
     * #LIANG-INFO: 返回结果中:
     * #LIANG-INFO: numItems 表示 RDD 所有数据的个数（等价于之前的 rddSize).
-    * #LIANG-INFO: sketched 是一个迭代器，每个元素是一个三元组 (idx, n, sample), 其中 idx 是分区编号, n 是分区的数据个数（而不是采样个数, sample 是一个数组，存储该分区采样得到的样本数据。
+    * #LIANG-INFO: sketched 是一个迭代器，每个元素是一个三元组 (idx, n, sample), 其中 idx 是分区编号, n 是分区的数据个数（而不是采样个数, sample 是一个数组, 存储该分区采样得到的样本数据。
     *
     * Sketches the input RDD via reservoir sampling on each partition.
     *

@@ -43,22 +43,29 @@ import org.apache.spark.util.{ChildFirstURLClassLoader, MutableURLClassLoader, U
 
 
 /**
- * Whether to submit, kill, or request the status of an application.
- * The latter two operations are currently supported only for standalone cluster mode.
- */
+  * Whether to submit, kill, or request the status of an application.
+  * The latter two operations are currently supported only for standalone cluster mode.
+  * #LIANG-INFO: 定义了Spark提交任务, 杀死任务, 查询状态等三个任务
+  * #LIANG-INFO: 其中, 后两个任务只能在standalone模式下有用
+  */
 private[deploy] object SparkSubmitAction extends Enumeration {
   type SparkSubmitAction = Value
   val SUBMIT, KILL, REQUEST_STATUS = Value
 }
 
 /**
- * Main gateway of launching a Spark application.
- *
- * This program handles setting up the classpath with relevant Spark dependencies and provides
- * a layer over the different cluster managers and deploy modes that Spark supports.
- */
+  * Main gateway of launching a Spark application.
+  *
+  * This program handles setting up the classpath with relevant Spark dependencies and provides
+  * a layer over the different cluster managers and deploy modes that Spark supports.
+  *
+  * #LINAG-INFO: Spark作业提交相关业务, 提供了classpath设置, 依赖管理, 以及各种运行模式的定义.
+  */
 object SparkSubmit {
 
+  /**
+    * #LIANG-INFO: Spark支持4中集群管理模式
+    */
   // Cluster managers
   private val YARN = 1
   private val STANDALONE = 2
@@ -66,6 +73,9 @@ object SparkSubmit {
   private val LOCAL = 8
   private val ALL_CLUSTER_MGRS = YARN | STANDALONE | MESOS | LOCAL
 
+  /**
+    * #LIANG-INFO: Spark支持两种部署模式
+    */
   // Deploy modes
   private val CLIENT = 1
   private val CLUSTER = 2
@@ -85,24 +95,33 @@ object SparkSubmit {
   // Exposed for testing
   private[spark] var exitFn: () => Unit = () => System.exit(1)
   private[spark] var printStream: PrintStream = System.err
+
   private[spark] def printWarning(str: String): Unit = printStream.println("Warning: " + str)
+
   private[spark] def printErrorAndExit(str: String): Unit = {
     printStream.println("Error: " + str)
     printStream.println("Run with --help for usage help or --verbose for debug output")
     exitFn()
   }
+
   private[spark] def printVersionAndExit(): Unit = {
-    printStream.println("""Welcome to
+    printStream.println(
+      """Welcome to
       ____              __
      / __/__  ___ _____/ /__
     _\ \/ _ \/ _ `/ __/  '_/
    /___/ .__/\_,_/_/ /_/\_\   version %s
       /_/
-                        """.format(SPARK_VERSION))
+      """.format(SPARK_VERSION))
     printStream.println("Type --help for more information.")
     exitFn()
   }
 
+  /**
+    * #LIANG-INFO: main函数定义, 通过SparkSubmitAction设定的action来执行相关的操作
+    * #LIANG-INFO: 重点关注: 集群管理模式, deploy模式, 默认参数, 系统参数
+    * @param args
+    */
   def main(args: Array[String]): Unit = {
     val appArgs = new SparkSubmitArguments(args)
     if (appArgs.verbose) {
@@ -116,31 +135,31 @@ object SparkSubmit {
   }
 
   /**
-   * Kill an existing submission using the REST protocol. Standalone and Mesos cluster mode only.
-   */
+    * Kill an existing submission using the REST protocol. Standalone and Mesos cluster mode only.
+    */
   private def kill(args: SparkSubmitArguments): Unit = {
     new RestSubmissionClient(args.master)
       .killSubmission(args.submissionToKill)
   }
 
   /**
-   * Request the status of an existing submission using the REST protocol.
-   * Standalone and Mesos cluster mode only.
-   */
+    * Request the status of an existing submission using the REST protocol.
+    * Standalone and Mesos cluster mode only.
+    */
   private def requestStatus(args: SparkSubmitArguments): Unit = {
     new RestSubmissionClient(args.master)
       .requestSubmissionStatus(args.submissionToRequestStatusFor)
   }
 
   /**
-   * Submit the application using the provided parameters.
-   *
-   * This runs in two steps. First, we prepare the launch environment by setting up
-   * the appropriate classpath, system properties, and application arguments for
-   * running the child main class based on the cluster manager and the deploy mode.
-   * Second, we use this launch environment to invoke the main method of the child
-   * main class.
-   */
+    * Submit the application using the provided parameters.
+    *
+    * This runs in two steps. First, we prepare the launch environment by setting up
+    * the appropriate classpath, system properties, and application arguments for
+    * running the child main class based on the cluster manager and the deploy mode.
+    * Second, we use this launch environment to invoke the main method of the child
+    * main class.
+    */
   private def submit(args: SparkSubmitArguments): Unit = {
     val (childArgs, childClasspath, sysProps, childMainClass) = prepareSubmitEnvironment(args)
 
@@ -171,11 +190,17 @@ object SparkSubmit {
       }
     }
 
-     // In standalone cluster mode, there are two submission gateways:
-     //   (1) The traditional Akka gateway using o.a.s.deploy.Client as a wrapper
-     //   (2) The new REST-based gateway introduced in Spark 1.3
-     // The latter is the default behavior as of Spark 1.3, but Spark submit will fail over
-     // to use the legacy gateway if the master endpoint turns out to be not a REST server.
+    /**
+      * #LIANG-INFO: Spark在standalone模式下, 有两种网关类型.
+      * #LIANG-INFO: Spark 1.3以后增加了REST方式.
+      * #LIANG-INFO: 如果用户设定使用REST方式, 但是standalone master不是没有提供REST接口, 则还使用AKKA
+      * #LIANG-INFO: 默认情况下, Spark使用AKKA作为通信网关
+      */
+    // In standalone cluster mode, there are two submission gateways:
+    //   (1) The traditional Akka gateway using o.a.s.deploy.Client as a wrapper
+    //   (2) The new REST-based gateway introduced in Spark 1.3
+    // The latter is the default behavior as of Spark 1.3, but Spark submit will fail over
+    // to use the legacy gateway if the master endpoint turns out to be not a REST server.
     if (args.isStandaloneCluster && args.useRest) {
       try {
         printStream.println("Running Spark using the REST application submission protocol.")
@@ -188,23 +213,23 @@ object SparkSubmit {
           args.useRest = false
           submit(args)
       }
-    // In all other modes, just run the main class as prepared
+      // In all other modes, just run the main class as prepared
     } else {
       doRunMain()
     }
   }
 
   /**
-   * Prepare the environment for submitting an application.
-   * This returns a 4-tuple:
-   *   (1) the arguments for the child process,
-   *   (2) a list of classpath entries for the child,
-   *   (3) a map of system properties, and
-   *   (4) the main class for the child
-   * Exposed for testing.
-   */
+    * Prepare the environment for submitting an application.
+    * This returns a 4-tuple:
+    * (1) the arguments for the child process,
+    * (2) a list of classpath entries for the child,
+    * (3) a map of system properties, and
+    * (4) the main class for the child
+    * Exposed for testing.
+    */
   private[deploy] def prepareSubmitEnvironment(args: SparkSubmitArguments)
-      : (Seq[String], Seq[String], Map[String, String], String) = {
+  : (Seq[String], Seq[String], Map[String, String], String) = {
     // Return values
     val childArgs = new ArrayBuffer[String]()
     val childClasspath = new ArrayBuffer[String]()
@@ -250,7 +275,7 @@ object SparkSubmit {
       if (!Utils.classIsLoadable("org.apache.spark.deploy.yarn.Client") && !Utils.isTesting) {
         printErrorAndExit(
           "Could not load YARN classes. " +
-          "This copy of Spark may not have been compiled with YARN support.")
+            "This copy of Spark may not have been compiled with YARN support.")
       }
     }
 
@@ -472,17 +497,25 @@ object SparkSubmit {
       if (isUserJar(args.primaryResource)) {
         childClasspath += args.primaryResource
       }
-      if (args.jars != null) { childClasspath ++= args.jars.split(",") }
-      if (args.childArgs != null) { childArgs ++= args.childArgs }
+      if (args.jars != null) {
+        childClasspath ++= args.jars.split(",")
+      }
+      if (args.childArgs != null) {
+        childArgs ++= args.childArgs
+      }
     }
 
     // Map all arguments to command-line options or system properties for our chosen mode
     for (opt <- options) {
       if (opt.value != null &&
-          (deployMode & opt.deployMode) != 0 &&
-          (clusterManager & opt.clusterManager) != 0) {
-        if (opt.clOption != null) { childArgs += (opt.clOption, opt.value) }
-        if (opt.sysProp != null) { sysProps.put(opt.sysProp, opt.value) }
+        (deployMode & opt.deployMode) != 0 &&
+        (clusterManager & opt.clusterManager) != 0) {
+        if (opt.clOption != null) {
+          childArgs +=(opt.clOption, opt.value)
+        }
+        if (opt.sysProp != null) {
+          sysProps.put(opt.sysProp, opt.value)
+        }
       }
     }
 
@@ -502,15 +535,17 @@ object SparkSubmit {
     if (args.isStandaloneCluster) {
       if (args.useRest) {
         childMainClass = "org.apache.spark.deploy.rest.RestSubmissionClient"
-        childArgs += (args.primaryResource, args.mainClass)
+        childArgs +=(args.primaryResource, args.mainClass)
       } else {
         // In legacy standalone cluster mode, use Client as a wrapper around the user class
         childMainClass = "org.apache.spark.deploy.Client"
-        if (args.supervise) { childArgs += "--supervise" }
-        Option(args.driverMemory).foreach { m => childArgs += ("--memory", m) }
-        Option(args.driverCores).foreach { c => childArgs += ("--cores", c) }
+        if (args.supervise) {
+          childArgs += "--supervise"
+        }
+        Option(args.driverMemory).foreach { m => childArgs +=("--memory", m) }
+        Option(args.driverCores).foreach { c => childArgs +=("--cores", c) }
         childArgs += "launch"
-        childArgs += (args.master, args.primaryResource, args.mainClass)
+        childArgs +=(args.master, args.primaryResource, args.mainClass)
       }
       if (args.childArgs != null) {
         childArgs ++= args.childArgs
@@ -522,33 +557,33 @@ object SparkSubmit {
       childMainClass = "org.apache.spark.deploy.yarn.Client"
       if (args.isPython) {
         val mainPyFile = new Path(args.primaryResource).getName
-        childArgs += ("--primary-py-file", mainPyFile)
+        childArgs +=("--primary-py-file", mainPyFile)
         if (args.pyFiles != null) {
           // These files will be distributed to each machine's working directory, so strip the
           // path prefix
           val pyFilesNames = args.pyFiles.split(",").map(p => (new Path(p)).getName).mkString(",")
-          childArgs += ("--py-files", pyFilesNames)
+          childArgs +=("--py-files", pyFilesNames)
         }
-        childArgs += ("--class", "org.apache.spark.deploy.PythonRunner")
+        childArgs +=("--class", "org.apache.spark.deploy.PythonRunner")
       } else if (args.isR) {
         val mainFile = new Path(args.primaryResource).getName
-        childArgs += ("--primary-r-file", mainFile)
-        childArgs += ("--class", "org.apache.spark.deploy.RRunner")
+        childArgs +=("--primary-r-file", mainFile)
+        childArgs +=("--class", "org.apache.spark.deploy.RRunner")
       } else {
         if (args.primaryResource != SPARK_INTERNAL) {
-          childArgs += ("--jar", args.primaryResource)
+          childArgs +=("--jar", args.primaryResource)
         }
-        childArgs += ("--class", args.mainClass)
+        childArgs +=("--class", args.mainClass)
       }
       if (args.childArgs != null) {
-        args.childArgs.foreach { arg => childArgs += ("--arg", arg) }
+        args.childArgs.foreach { arg => childArgs +=("--arg", arg) }
       }
     }
 
     if (isMesosCluster) {
       assert(args.useRest, "Mesos cluster mode is only supported through the REST submission API")
       childMainClass = "org.apache.spark.deploy.rest.RestSubmissionClient"
-      childArgs += (args.primaryResource, args.mainClass)
+      childArgs +=(args.primaryResource, args.mainClass)
       if (args.childArgs != null) {
         childArgs ++= args.childArgs
       }
@@ -591,17 +626,17 @@ object SparkSubmit {
   }
 
   /**
-   * Run the main method of the child class using the provided launch environment.
-   *
-   * Note that this main class will not be the one provided by the user if we're
-   * running cluster deploy mode or python applications.
-   */
+    * Run the main method of the child class using the provided launch environment.
+    *
+    * Note that this main class will not be the one provided by the user if we're
+    * running cluster deploy mode or python applications.
+    */
   private def runMain(
-      childArgs: Seq[String],
-      childClasspath: Seq[String],
-      sysProps: Map[String, String],
-      childMainClass: String,
-      verbose: Boolean): Unit = {
+                       childArgs: Seq[String],
+                       childClasspath: Seq[String],
+                       sysProps: Map[String, String],
+                       childMainClass: String,
+                       verbose: Boolean): Unit = {
     if (verbose) {
       printStream.println(s"Main class:\n$childMainClass")
       printStream.println(s"Arguments:\n${childArgs.mkString("\n")}")
@@ -610,6 +645,9 @@ object SparkSubmit {
       printStream.println("\n")
     }
 
+    /**
+      * #LIANG-INFO: 是否使用用户自定义的classloader
+      */
     val loader =
       if (sysProps.getOrElse("spark.driver.userClassPathFirst", "false").toBoolean) {
         new ChildFirstURLClassLoader(new Array[URL](0),
@@ -662,6 +700,9 @@ object SparkSubmit {
     }
 
     try {
+      /**
+        * #LIANG-INFO: 调用main函数
+        */
       mainMethod.invoke(null, childArgs.toArray)
     } catch {
       case t: Throwable =>
@@ -685,43 +726,43 @@ object SparkSubmit {
   }
 
   /**
-   * Return whether the given primary resource represents a user jar.
-   */
+    * Return whether the given primary resource represents a user jar.
+    */
   private[deploy] def isUserJar(res: String): Boolean = {
     !isShell(res) && !isPython(res) && !isInternal(res) && !isR(res)
   }
 
   /**
-   * Return whether the given primary resource represents a shell.
-   */
+    * Return whether the given primary resource represents a shell.
+    */
   private[deploy] def isShell(res: String): Boolean = {
     (res == SPARK_SHELL || res == PYSPARK_SHELL || res == SPARKR_SHELL)
   }
 
   /**
-   * Return whether the given main class represents a sql shell.
-   */
+    * Return whether the given main class represents a sql shell.
+    */
   private def isSqlShell(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver"
   }
 
   /**
-   * Return whether the given main class represents a thrift server.
-   */
+    * Return whether the given main class represents a thrift server.
+    */
   private def isThriftServer(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.HiveThriftServer2"
   }
 
   /**
-   * Return whether the given primary resource requires running python.
-   */
+    * Return whether the given primary resource requires running python.
+    */
   private[deploy] def isPython(res: String): Boolean = {
     res != null && res.endsWith(".py") || res == PYSPARK_SHELL
   }
 
   /**
-   * Return whether the given primary resource requires running R.
-   */
+    * Return whether the given primary resource requires running R.
+    */
   private[deploy] def isR(res: String): Boolean = {
     res != null && res.endsWith(".R") || res == SPARKR_SHELL
   }
@@ -731,13 +772,13 @@ object SparkSubmit {
   }
 
   /**
-   * Merge a sequence of comma-separated file lists, some of which may be null to indicate
-   * no files, into a single comma-separated string.
-   */
+    * Merge a sequence of comma-separated file lists, some of which may be null to indicate
+    * no files, into a single comma-separated string.
+    */
   private def mergeFileLists(lists: String*): String = {
     val merged = lists.filter(_ != null)
-                      .flatMap(_.split(","))
-                      .mkString(",")
+      .flatMap(_.split(","))
+      .mkString(",")
     if (merged == "") null else merged
   }
 }
@@ -749,21 +790,23 @@ private[spark] object SparkSubmitUtils {
   var printStream = SparkSubmit.printStream
 
   /**
-   * Represents a Maven Coordinate
-   * @param groupId the groupId of the coordinate
-   * @param artifactId the artifactId of the coordinate
-   * @param version the version of the coordinate
-   */
+    * Represents a Maven Coordinate
+    *
+    * @param groupId    the groupId of the coordinate
+    * @param artifactId the artifactId of the coordinate
+    * @param version    the version of the coordinate
+    */
   private[deploy] case class MavenCoordinate(groupId: String, artifactId: String, version: String) {
     override def toString: String = s"$groupId:$artifactId:$version"
   }
 
-/**
- * Extracts maven coordinates from a comma-delimited string. Coordinates should be provided
- * in the format `groupId:artifactId:version` or `groupId/artifactId:version`.
- * @param coordinates Comma-delimited string of maven coordinates
- * @return Sequence of Maven coordinates
- */
+  /**
+    * Extracts maven coordinates from a comma-delimited string. Coordinates should be provided
+    * in the format `groupId:artifactId:version` or `groupId/artifactId:version`.
+    *
+    * @param coordinates Comma-delimited string of maven coordinates
+    * @return Sequence of Maven coordinates
+    */
   def extractMavenCoordinates(coordinates: String): Seq[MavenCoordinate] = {
     coordinates.split(",").map { p =>
       val splits = p.replace("/", ":").split(":")
@@ -790,11 +833,12 @@ private[spark] object SparkSubmitUtils {
   }
 
   /**
-   * Extracts maven coordinates from a comma-delimited string
-   * @param remoteRepos Comma-delimited string of remote repositories
-   * @param ivySettings The Ivy settings for this session
-   * @return A ChainResolver used by Ivy to search for and resolve dependencies.
-   */
+    * Extracts maven coordinates from a comma-delimited string
+    *
+    * @param remoteRepos Comma-delimited string of remote repositories
+    * @param ivySettings The Ivy settings for this session
+    * @return A ChainResolver used by Ivy to search for and resolve dependencies.
+    */
   def createRepoResolvers(remoteRepos: Option[String], ivySettings: IvySettings): ChainResolver = {
     // We need a chain resolver if we want to check multiple repositories
     val cr = new ChainResolver
@@ -848,15 +892,16 @@ private[spark] object SparkSubmitUtils {
   }
 
   /**
-   * Output a comma-delimited list of paths for the downloaded jars to be added to the classpath
-   * (will append to jars in SparkSubmit).
-   * @param artifacts Sequence of dependencies that were resolved and retrieved
-   * @param cacheDirectory directory where jars are cached
-   * @return a comma-delimited list of paths for the dependencies
-   */
+    * Output a comma-delimited list of paths for the downloaded jars to be added to the classpath
+    * (will append to jars in SparkSubmit).
+    *
+    * @param artifacts      Sequence of dependencies that were resolved and retrieved
+    * @param cacheDirectory directory where jars are cached
+    * @return a comma-delimited list of paths for the dependencies
+    */
   def resolveDependencyPaths(
-      artifacts: Array[AnyRef],
-      cacheDirectory: File): String = {
+                              artifacts: Array[AnyRef],
+                              cacheDirectory: File): String = {
     artifacts.map { artifactInfo =>
       val artifact = artifactInfo.asInstanceOf[Artifact].getModuleRevisionId
       cacheDirectory.getAbsolutePath + File.separator +
@@ -866,9 +911,9 @@ private[spark] object SparkSubmitUtils {
 
   /** Adds the given maven coordinates to Ivy's module descriptor. */
   def addDependenciesToIvy(
-      md: DefaultModuleDescriptor,
-      artifacts: Seq[MavenCoordinate],
-      ivyConfName: String): Unit = {
+                            md: DefaultModuleDescriptor,
+                            artifacts: Seq[MavenCoordinate],
+                            ivyConfName: String): Unit = {
     artifacts.foreach { mvn =>
       val ri = ModuleRevisionId.newInstance(mvn.groupId, mvn.artifactId, mvn.version)
       val dd = new DefaultDependencyDescriptor(ri, false, false)
@@ -880,9 +925,9 @@ private[spark] object SparkSubmitUtils {
 
   /** Add exclusion rules for dependencies already included in the spark-assembly */
   def addExclusionRules(
-      ivySettings: IvySettings,
-      ivyConfName: String,
-      md: DefaultModuleDescriptor): Unit = {
+                         ivySettings: IvySettings,
+                         ivyConfName: String,
+                         md: DefaultModuleDescriptor): Unit = {
     // Add scala exclusion rule
     val scalaArtifacts = new ArtifactId(new ModuleId("*", "scala-library"), "*", "*", "*")
     val scalaDependencyExcludeRule =
@@ -912,18 +957,19 @@ private[spark] object SparkSubmitUtils {
     ModuleRevisionId.newInstance("org.apache.spark", "spark-submit-parent", "1.0"))
 
   /**
-   * Resolves any dependencies that were supplied through maven coordinates
-   * @param coordinates Comma-delimited string of maven coordinates
-   * @param remoteRepos Comma-delimited string of remote repositories other than maven central
-   * @param ivyPath The path to the local ivy repository
-   * @return The comma-delimited path to the jars of the given maven artifacts including their
-   *         transitive dependencies
-   */
+    * Resolves any dependencies that were supplied through maven coordinates
+    *
+    * @param coordinates Comma-delimited string of maven coordinates
+    * @param remoteRepos Comma-delimited string of remote repositories other than maven central
+    * @param ivyPath     The path to the local ivy repository
+    * @return The comma-delimited path to the jars of the given maven artifacts including their
+    *         transitive dependencies
+    */
   def resolveMavenCoordinates(
-      coordinates: String,
-      remoteRepos: Option[String],
-      ivyPath: Option[String],
-      isTest: Boolean = false): String = {
+                               coordinates: String,
+                               remoteRepos: Option[String],
+                               ivyPath: Option[String],
+                               isTest: Boolean = false): String = {
     if (coordinates == null || coordinates.trim.isEmpty) {
       ""
     } else {
@@ -1008,12 +1054,12 @@ private[spark] object SparkSubmitUtils {
 }
 
 /**
- * Provides an indirection layer for passing arguments as system properties or flags to
- * the user's driver program or to downstream launcher tools.
- */
+  * Provides an indirection layer for passing arguments as system properties or flags to
+  * the user's driver program or to downstream launcher tools.
+  */
 private case class OptionAssigner(
-    value: String,
-    clusterManager: Int,
-    deployMode: Int,
-    clOption: String = null,
-    sysProp: String = null)
+                                   value: String,
+                                   clusterManager: Int,
+                                   deployMode: Int,
+                                   clOption: String = null,
+                                   sysProp: String = null)
